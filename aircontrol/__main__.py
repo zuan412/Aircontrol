@@ -125,12 +125,28 @@ class EngineRunner:
             asyncio.run_coroutine_threadsafe(_cleanup(), self.loop)
 
 
+def find_hardware_app_browser() -> Optional[str]:
+    import os
+    candidates = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Aircontrol - Bespoke iPhone Mirror & Remote Control")
     parser.add_argument("--udid", type=str, default=None, help="Target iPhone UDID")
     parser.add_argument("--wifi", action="store_true", help="Connect via Wi-Fi Bonjour instead of USB")
     parser.add_argument("--port", type=int, default=8080, help="Local HTTP stream port (default: 8080)")
     parser.add_argument("--no-gui", action="store_true", help="Run in headless server-only mode")
+    parser.add_argument("--qt", action="store_true", help="Force QtWebEngine GUI instead of Edge/Chrome App window")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -157,6 +173,30 @@ def main() -> int:
             runner.stop()
             return 0
 
+    browser_bin = None if args.qt else find_hardware_app_browser()
+    if browser_bin:
+        import subprocess
+        from pathlib import Path
+        profile_dir = Path(__file__).resolve().parent.parent / ".profile"
+        cmd = [
+            browser_bin,
+            f"--app={actual_url}",
+            "--window-size=620,980",
+            f"--user-data-dir={profile_dir}",
+            "--disable-features=Translate",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--app-id=aircontrol-iphone",
+        ]
+        print(f"[Aircontrol] Khởi động cửa sổ ứng dụng tăng tốc Direct3D 11...")
+        proc = subprocess.Popen(cmd)
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+        runner.stop()
+        return 0
+
     from aircontrol.ui.app import AircontrolApp
 
     app = AircontrolApp(sys.argv)
@@ -170,6 +210,7 @@ def main() -> int:
     ret = app.run()
     runner.stop()
     return ret
+
 
 
 if __name__ == "__main__":

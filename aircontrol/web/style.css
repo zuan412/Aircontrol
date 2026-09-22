@@ -43,6 +43,7 @@ body, html {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 20px;
   background: radial-gradient(circle at 50% 30%, #171b23 0%, #090a0d 100%);
 }
 
@@ -310,4 +311,50 @@ body, html {
 .hud-val {
   color: #30d158;
   font-weight: 600;
+}
+
+/* --- Acrylic Quick Toolbar --- */
+.acrylic-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(24, 27, 34, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 12px 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+
+.tb-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #e0e0e0;
+  font-family: var(--font-family);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.tb-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.tb-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.96);
+}
+
+.tb-btn.active {
+  background: rgba(0, 113, 227, 0.35);
+  color: #2997ff;
+  border-color: rgba(41, 151, 255, 0.4);
 }

@@ -83,8 +83,8 @@
           }
         },
         error: (err) => {
-          console.warn('WebCodecs Decoder error:', err);
-          rebuildDecoder();
+          const detail = (err && (err.name || err.message)) ? `${err.name}: ${err.message}` : String(err);
+          console.warn('WebCodecs Decoder error:', detail);
         }
       });
 
@@ -294,6 +294,54 @@
     }
   });
 
+  // --- Acrylic Quick Toolbar Handlers ---
+  const tbScreenshot = document.getElementById('tb-screenshot');
+  const tbRotate = document.getElementById('tb-rotate');
+  const tbSound = document.getElementById('tb-sound');
+  const tbHud = document.getElementById('tb-hud');
+  const tbReconnect = document.getElementById('tb-reconnect');
+
+  if (tbScreenshot) {
+    tbScreenshot.addEventListener('click', () => {
+      if (!canvas.width || !canvas.height) return;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `iPhone-screenshot-${Date.now()}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      });
+    });
+  }
+
+  if (tbRotate) {
+    tbRotate.addEventListener('click', () => {
+      fetch('/rotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'right' })
+      }).catch(() => {});
+    });
+  }
+
+  if (tbHud) {
+    tbHud.addEventListener('click', () => {
+      if (hud) {
+        hud.classList.toggle('hidden');
+        tbHud.classList.toggle('active', !hud.classList.contains('hidden'));
+      }
+    });
+  }
+
+  if (tbReconnect) {
+    tbReconnect.addEventListener('click', () => {
+      fetch('/restart', { method: 'POST' }).catch(() => {});
+      location.reload();
+    });
+  }
+
   // Launch stream engine
   connectStream();
 })();
+
