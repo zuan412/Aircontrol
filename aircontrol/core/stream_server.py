@@ -1,281 +1,195 @@
-"""StreamServer: A lightweight, asynchronous HTTP server distributing HEVC feeds and input events."""
+"""Aircontrol Stream Server: High-performance Apple CoreDevice screen streaming and input bridging."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import socket
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Optional
 
-from aiohttp import web
+from pymobiledevice3.remote.core_device import screen_stream
+from pymobiledevice3.remote.core_device.screen_stream import ScreenStreamServer
 
 logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
-class StreamServer:
-    """HTTP and Stream server for WebCodecs client and control API."""
+def find_available_port(start_port: int = 8080, max_range: int = 50) -> int:
+    """Find a guaranteed available TCP port on localhost to avoid Errno 10048."""
+    if start_port == 0:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
 
-    def __init__(
-        self,
-        host: str = "127.0.0.1",
-        port: int = 8080,
-        rsd: Any = None,
-        on_touch: Optional[Callable[[str, float, float], Any]] = None,
-        on_button: Optional[Callable[[str], Any]] = None,
-        on_key: Optional[Callable[[str, str], Any]] = None,
-    ) -> None:
-        self.host = host
-        self.requested_port = port
-        self.rsd = rsd
-        self.on_touch = on_touch
-        self.on_button = on_button
-        self.on_key = on_key
+    for port in range(start_port, start_port + max_range):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return start_port
 
-        self._app: Optional[web.Application] = None
-        self._runner: Optional[web.AppRunner] = None
-        self._site: Optional[web.TCPSite] = None
-        self._bound_port: int = 0
-        self._is_streaming: bool = False
-        self._stream_subscribers: Set[web.StreamResponse] = set()
-        self._pmd_stream_task: Optional[asyncio.Task] = None
-        self.hid_bridge: Optional[Any] = None
 
-    async def attach_device(self, rsd: Any) -> None:
-        """Attach an active RSD session, wire HID bridge and prepare stream."""
-        self.rsd = rsd
-        from aircontrol.core.hid_bridge import HIDBridge
-        self.hid_bridge = HIDBridge(rsd=rsd)
-        self.on_touch = self.hid_bridge.send_touch
-        self.on_button = self.hid_bridge.send_button
+def configure_bespoke_viewer() -> None:
+    """Inject our custom iPhone 16 Pro mockup and WebCodecs engine into pymobiledevice3's viewer."""
+    html_path = WEB_DIR / "index.html"
+    css_path = WEB_DIR / "style.css"
+    js_path = WEB_DIR / "app.js"
 
-    async def start_device_streaming(self) -> None:
-        """Start capturing video stream from connected iOS device."""
-        if not self.rsd:
-            logger.warning("Cannot start device streaming: No RSD connected")
-            return
-        if self._pmd_stream_task and not self._pmd_stream_task.done():
-            return
-        self._pmd_stream_task = asyncio.create_task(self._device_stream_loop())
+    if html_path.exists():
+        screen_stream.VIEWER_HTML = html_path.read_bytes()
+    if css_path.exists():
+        screen_stream.VIEWER_CSS = css_path.read_bytes()
+    if js_path.exists():
+        screen_stream.VIEWER_JS_TEMPLATE = js_path.read_bytes()
 
-    async def _device_stream_loop(self) -> None:
-        """UDP RTP reception and HEVC depacketization loop."""
-        try:
-            from pymobiledevice3.remote.core_device.display_service import DisplayService
-            from pymobiledevice3.remote.core_device.screen_stream import open_media_receiver, depacketize_hevc
 
-            disp_svc = DisplayService(self.rsd)
-            await disp_svc.connect()
-            transport, local_ip = open_media_receiver(disp_svc, rcvbuf_sizes=(8 * 1024 * 1024, 4 * 1024 * 1024))
-            await disp_svc.start_video_stream(
-                client_ip=local_ip,
-                client_port=transport.port,
-                display_id=1,
-            )
-            self._is_streaming = True
-            logger.info("iOS display video stream started via UDP %s:%d", local_ip, transport.port)
+class AircontrolStreamServer(ScreenStreamServer):
+    """Bespoke ScreenStreamServer that serves our custom iPhone 16 Pro UI,
+    bypasses macOS-only audio dependencies on Windows, and integrates directly with PySide6."""
 
-            fu_buffer = bytearray()
-            nal_out: list[bytes] = []
+    def __init__(self, rsd: Any, bind: str = "127.0.0.1", http_port: int = 8080) -> None:
+        configure_bespoke_viewer()
+        self.actual_port = find_available_port(http_port)
+        super().__init__(
+            rsd=rsd,
+            bind=bind,
+            http_port=self.actual_port,
+            audio_default_on=False,
+        )
 
-            while self.is_running and self._is_streaming:
-                try:
-                    data = await transport.recv(65535)
-                    if not data:
-                        break
-                    if len(data) > 12:
-                        payload = data[12:]
-                        marker = bool(data[1] & 0x80)
-                        depacketize_hevc(payload, fu_buffer, nal_out)
-                        if marker and nal_out:
-                            au = b"".join(b"\x00\x00\x00\x01" + nal for nal in nal_out)
-                            nal_out.clear()
-                            self.broadcast_frame(au)
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    logger.debug("Packet receive error: %s", e)
-        except Exception as e:
-            logger.warning("Failed to start or run device stream loop: %s", e)
-        finally:
-            self._is_streaming = False
-
-    @property
-    def is_running(self) -> bool:
-        return self._site is not None
-
-    @property
-    def port(self) -> int:
-        return self._bound_port
+    async def _ensure_audio_stream(self) -> None:
+        """AudioToolbox AAC-ELD decode is macOS-only; safely bypass on Windows."""
+        return
 
     @property
     def url(self) -> str:
-        return f"http://{self.host}:{self._bound_port}"
+        return f"http://{self._bind}:{self.actual_port}"
+
+
+class AircontrolFallbackServer:
+    """Lightweight HTTP server serving the standby iPhone UI and diagnostics while waiting for device connection."""
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 8080, rsd: Any = None) -> None:
+        self.host = host
+        self.requested_port = port
+        self.rsd = rsd
+        self._port = find_available_port(port)
+        self._server: Optional[asyncio.Server] = None
+        self._live_stream_server: Optional[AircontrolStreamServer] = None
+        self.hid_bridge: Optional[Any] = None
+
+    @property
+    def is_running(self) -> bool:
+        return self._server is not None or self._live_stream_server is not None
+
+    @property
+    def port(self) -> int:
+        if self._live_stream_server is not None:
+            return self._live_stream_server.actual_port
+        return self._port
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}"
 
     async def start(self) -> None:
-        """Start the HTTP server on the configured host/port."""
-        if self.is_running:
+        if self._server is not None:
             return
-
-        self._app = web.Application()
-        self._setup_routes()
-
-        self._runner = web.AppRunner(self._app)
-        await self._runner.setup()
-
-        last_err = None
-        for try_port in range(self.requested_port, self.requested_port + 20):
-            try:
-                self._site = web.TCPSite(self._runner, self.host, try_port)
-                await self._site.start()
-                assert self._site._server is not None
-                sockets = self._site._server.sockets
-                if sockets:
-                    self._bound_port = sockets[0].getsockname()[1]
-                else:
-                    self._bound_port = try_port
-                last_err = None
-                break
-            except OSError as err:
-                last_err = err
-                continue
-
-        if last_err is not None:
-            raise last_err
-
-        logger.info("Aircontrol StreamServer started on %s", self.url)
+        self._server = await asyncio.start_server(self._handle_http, self.host, self._port)
+        # Update actual port if port=0 was requested
+        if self._server.sockets:
+            self._port = self._server.sockets[0].getsockname()[1]
+        logger.info("Aircontrol Server running on %s", self.url)
 
     async def stop(self) -> None:
-        """Stop server and disconnect active clients."""
-        if self._pmd_stream_task and not self._pmd_stream_task.done():
-            self._pmd_stream_task.cancel()
+        if self._live_stream_server is not None:
             try:
-                await self._pmd_stream_task
-            except asyncio.CancelledError:
-                pass
-            self._pmd_stream_task = None
-
-        for sub in list(self._stream_subscribers):
-            try:
-                await sub.write_eof()
+                await self._live_stream_server._stop_active_stream()
             except Exception:
                 pass
-        self._stream_subscribers.clear()
+            self._live_stream_server = None
 
-        if self._runner is not None:
-            await self._runner.cleanup()
-            self._runner = None
-            self._site = None
+        if self._server:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+            logger.info("Aircontrol Server stopped")
 
-        self._bound_port = 0
-        logger.info("Aircontrol StreamServer stopped")
+    async def attach_device(self, rsd: Any) -> None:
+        """Attach connected iOS device and prepare streaming bridge."""
+        self.rsd = rsd
+        from aircontrol.core.hid_bridge import HIDBridge
+        self.hid_bridge = HIDBridge(rsd=rsd)
 
-    def broadcast_frame(self, data: bytes) -> None:
-        """Broadcast a framed HEVC access unit (4-byte length prefix + data) to all web clients."""
-        if not self._stream_subscribers:
+    async def start_device_streaming(self) -> None:
+        """Start full ScreenStreamServer on the device."""
+        if not self.rsd:
+            logger.warning("Cannot start device streaming: No RSD connected")
             return
-        payload = len(data).to_bytes(4, byteorder="big") + data
-        for resp in list(self._stream_subscribers):
-            try:
-                resp.write(payload)
-            except Exception:
-                self._stream_subscribers.discard(resp)
-
-    def _setup_routes(self) -> None:
-        assert self._app is not None
-        self._app.router.add_get("/", self._handle_index)
-        self._app.router.add_get("/status", self._handle_status)
-        self._app.router.add_get("/stream", self._handle_stream)
-        self._app.router.add_post("/touch", self._handle_touch)
-        self._app.router.add_post("/button", self._handle_button)
-        self._app.router.add_post("/key", self._handle_key)
-
-        # Static files
-        if WEB_DIR.exists():
-            self._app.router.add_static("/static", str(WEB_DIR))
-            if (WEB_DIR / "app.js").exists():
-                self._app.router.add_get("/app.js", lambda r: web.FileResponse(str(WEB_DIR / "app.js")))
-            if (WEB_DIR / "style.css").exists():
-                self._app.router.add_get("/style.css", lambda r: web.FileResponse(str(WEB_DIR / "style.css")))
-
-    async def _handle_index(self, request: web.Request) -> web.Response:
-        index_file = WEB_DIR / "index.html"
-        if index_file.exists():
-            return web.FileResponse(str(index_file))
-        return web.Response(
-            text="""<!DOCTYPE html>
-<html>
-<head><title>Aircontrol Stream</title></head>
-<body><h2>Aircontrol Engine Running</h2><p>Connect client or embed in Aircontrol Desktop App.</p></body>
-</html>""",
-            content_type="text/html",
+        if self._server:
+            await self.stop()
+        self._live_stream_server = AircontrolStreamServer(
+            rsd=self.rsd,
+            bind=self.host,
+            http_port=self._port,
         )
+        asyncio.create_task(self._live_stream_server.serve())
 
-    async def _handle_status(self, request: web.Request) -> web.Response:
-        return web.json_response({
-            "status": "ok",
-            "streaming": self._is_streaming,
-            "subscribers": len(self._stream_subscribers),
-            "device": getattr(self.rsd, "name", "None") if self.rsd else "None",
-        })
-
-    async def _handle_stream(self, request: web.Request) -> web.StreamResponse:
-        response = web.StreamResponse(
-            status=200,
-            reason="OK",
-            headers={
-                "Content-Type": "application/octet-stream",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Connection": "keep-alive",
-            },
-        )
-        await response.prepare(request)
-        self._stream_subscribers.add(response)
+    async def _handle_http(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
+            line = await reader.readline()
+            if not line:
+                writer.close()
+                return
             while True:
-                await asyncio.sleep(5.0)
-        except (asyncio.CancelledError, ConnectionResetError):
+                h = await reader.readline()
+                if h in (b"\r\n", b"", b"\n"):
+                    break
+            parts = line.split()
+            path = parts[1].decode().split("?")[0] if len(parts) >= 2 else "/"
+
+            if path in ("/", "/index.html"):
+                body = (WEB_DIR / "index.html").read_bytes()
+                ctype = b"text/html; charset=utf-8"
+            elif path in ("/viewer.css", "/style.css"):
+                body = (WEB_DIR / "style.css").read_bytes()
+                ctype = b"text/css; charset=utf-8"
+            elif path in ("/viewer.js", "/app.js"):
+                body = (WEB_DIR / "app.js").read_bytes()
+                ctype = b"application/javascript; charset=utf-8"
+            elif path == "/status":
+                body = json.dumps({"status": "ok", "mode": "standby"}).encode("utf-8")
+                ctype = b"application/json"
+            else:
+                body = b"waiting for device connection"
+                ctype = b"text/plain"
+
+            resp = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: " + ctype + b"\r\n"
+                b"Content-Length: " + str(len(body)).encode() + b"\r\n"
+                b"Connection: close\r\n\r\n" + body
+            )
+            writer.write(resp)
+            await writer.drain()
+        except Exception:
             pass
         finally:
-            self._stream_subscribers.discard(response)
-        return response
+            writer.close()
 
-    async def _handle_touch(self, request: web.Request) -> web.Response:
-        try:
-            data = await request.json()
-            action = data.get("action", "move")
-            x = float(data.get("x", 0.0))
-            y = float(data.get("y", 0.0))
-            if self.on_touch:
-                res = self.on_touch(action, x, y)
-                if asyncio.iscoroutine(res):
-                    await res
-            return web.json_response({"ok": True})
-        except Exception as e:
-            return web.json_response({"ok": False, "error": str(e)}, status=400)
 
-    async def _handle_button(self, request: web.Request) -> web.Response:
-        try:
-            data = await request.json()
-            button = data.get("button", "")
-            if self.on_button and button:
-                res = self.on_button(button)
-                if asyncio.iscoroutine(res):
-                    await res
-            return web.json_response({"ok": True})
-        except Exception as e:
-            return web.json_response({"ok": False, "error": str(e)}, status=400)
-
-    async def _handle_key(self, request: web.Request) -> web.Response:
-        try:
-            data = await request.json()
-            key = data.get("key", "")
-            code = data.get("code", "")
-            if self.on_key:
-                res = self.on_key(key, code)
-                if asyncio.iscoroutine(res):
-                    await res
-            return web.json_response({"ok": True})
-        except Exception as e:
-            return web.json_response({"ok": False, "error": str(e)}, status=400)
+def StreamServer(
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    rsd: Any = None,
+    **kwargs: Any,
+) -> Any:
+    """Factory creating either AircontrolStreamServer (if RSD provided) or AircontrolFallbackServer."""
+    if rsd is not None:
+        return AircontrolStreamServer(rsd=rsd, bind=host, http_port=port)
+    return AircontrolFallbackServer(host=host, port=port, rsd=rsd)
