@@ -105,10 +105,10 @@ class ConnectionManager:
             rsd = await stack.enter_async_context(tunnel)
 
             # Extract device information
-            dev_name = getattr(rsd, "name", "iPhone")
-            product_type = getattr(rsd, "product_type", "iPhone")
-            ios_version = getattr(rsd, "product_version", "17.0")
-            actual_udid = getattr(rsd, "udid", udid or "")
+            dev_name = getattr(rsd, "name", None) or getattr(rsd, "device_name", None) or "iPhone"
+            product_type = getattr(rsd, "product_type", None) or "iPhone"
+            ios_version = getattr(rsd, "product_version", None) or "17.0"
+            actual_udid = getattr(rsd, "udid", None) or udid or ""
 
             self._rsd = rsd
             self._exit_stack = stack

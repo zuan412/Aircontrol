@@ -9,11 +9,20 @@ import sys
 import threading
 from typing import Any, Optional
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 logger = logging.getLogger("aircontrol")
 
 
 class EngineRunner:
-    """Runs the asyncio backend (ConnectionManager + StreamServer) in a dedicated daemon thread."""
+    """Runs the asyncio backend (ConnectionManager + ScreenStreamServer) in a dedicated daemon thread."""
 
     def __init__(self, port: int = 8080, udid: Optional[str] = None, via_wifi: bool = False) -> None:
         self.port = port
@@ -25,12 +34,14 @@ class EngineRunner:
         self.conn_mgr: Optional[Any] = None
         self.stream_server: Optional[Any] = None
         self.device_info: Optional[Any] = None
+        self.actual_url: str = f"http://127.0.0.1:{port}"
         self._ready_event = threading.Event()
+        self._server_task: Optional[asyncio.Task] = None
 
     def start(self) -> None:
         self.thread = threading.Thread(target=self._run_loop, daemon=True, name="AircontrolEngineThread")
         self.thread.start()
-        self._ready_event.wait(timeout=5.0)
+        self._ready_event.wait(timeout=6.0)
 
     def _run_loop(self) -> None:
         self.loop = asyncio.new_event_loop()
@@ -40,12 +51,9 @@ class EngineRunner:
     async def _async_main(self) -> None:
         from aircontrol.core.connection import ConnectionManager
         from aircontrol.core.stream_server import StreamServer
+        from pymobiledevice3.remote.core_device.screen_stream import ScreenStreamServer
 
         self.conn_mgr = ConnectionManager()
-        self.stream_server = StreamServer(host="127.0.0.1", port=self.port)
-        await self.stream_server.start()
-
-        self._ready_event.set()
 
         # Connect to iPhone
         try:
@@ -56,26 +64,57 @@ class EngineRunner:
             if target_udid:
                 print(f"[Aircontrol] Đang kết nối tới iPhone (UDID: {target_udid})...")
                 self.device_info = await self.conn_mgr.connect(udid=target_udid, via_wifi=self.via_wifi)
-                print(f"[Aircontrol] Đã kết nối thành công tới: {self.device_info.name} ({self.device_info.product_type})")
-                
-                await self.stream_server.attach_device(self.conn_mgr.rsd)
-                await self.stream_server.start_device_streaming()
-            else:
-                print("[Aircontrol] Chưa phát hiện iPhone. Server đang chờ thiết bị cắm vào...")
-        except Exception as e:
-            print(f"[Aircontrol] Ghi chú kết nối: {e}")
+                dev_name = self.device_info.name or "iPhone"
+                dev_model = self.device_info.product_type or "iOS"
+                print(f"[Aircontrol] Đã kết nối thành công tới: {dev_name} ({dev_model})")
 
-        # Keep server loop alive
-        while self.stream_server and self.stream_server.is_running:
-            await asyncio.sleep(1.0)
+                # Use battle-tested ScreenStreamServer with hardware WebCodecs
+                self.stream_server = ScreenStreamServer(
+                    rsd=self.conn_mgr.rsd,
+                    bind="127.0.0.1",
+                    http_port=self.port,
+                    audio_default_on=False,
+                )
+                self.actual_url = f"http://127.0.0.1:{self.port}"
+                self._ready_event.set()
+                await self.stream_server.serve()
+            else:
+                print("[Aircontrol] Chưa phát hiện iPhone. Khởi động màn hình chờ...")
+                # Start fallback standby server
+                fallback = StreamServer(host="127.0.0.1", port=self.port)
+                await fallback.start()
+                self.stream_server = fallback
+                self.actual_url = fallback.url
+                self._ready_event.set()
+
+                # Poll for connection
+                while True:
+                    await asyncio.sleep(2.0)
+                    devs = await self.conn_mgr.list_devices()
+                    if devs:
+                        print(f"[Aircontrol] Phát hiện thiết bị mới cắm vào: {devs[0].udid}. Đang khởi động lại luồng...")
+                        await fallback.stop()
+                        self.device_info = await self.conn_mgr.connect(udid=devs[0].udid, via_wifi=self.via_wifi)
+                        self.stream_server = ScreenStreamServer(
+                            rsd=self.conn_mgr.rsd,
+                            bind="127.0.0.1",
+                            http_port=self.port,
+                            audio_default_on=False,
+                        )
+                        await self.stream_server.serve()
+                        break
+        except Exception as e:
+            print(f"[Aircontrol] Lỗi kết nối thiết bị: {e}")
+            self._ready_event.set()
 
     def stop(self) -> None:
         if self.loop and self.loop.is_running():
             async def _cleanup():
-                if self.stream_server:
-                    await self.stream_server.stop()
                 if self.conn_mgr:
-                    await self.conn_mgr.disconnect()
+                    try:
+                        await self.conn_mgr.disconnect()
+                    except Exception:
+                        pass
             asyncio.run_coroutine_threadsafe(_cleanup(), self.loop)
 
 
@@ -92,8 +131,12 @@ def main() -> int:
     runner = EngineRunner(port=args.port, udid=args.udid, via_wifi=args.wifi)
     runner.start()
 
-    actual_url = runner.stream_server.url if runner.stream_server else f"http://127.0.0.1:{args.port}"
-    device_name = runner.device_info.name if runner.device_info else "iPhone"
+    actual_url = runner.actual_url
+    device_name = (
+        runner.device_info.name
+        if runner.device_info and runner.device_info.name
+        else "iPhone"
+    )
 
     print(f"[Aircontrol] Giao diện WebCodecs sẵn sàng tại: {actual_url}")
 
