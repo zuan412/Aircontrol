@@ -40,6 +40,68 @@ class StreamServer:
         self._is_streaming: bool = False
         self._stream_subscribers: Set[web.StreamResponse] = set()
         self._pmd_stream_task: Optional[asyncio.Task] = None
+        self.hid_bridge: Optional[Any] = None
+
+    async def attach_device(self, rsd: Any) -> None:
+        """Attach an active RSD session, wire HID bridge and prepare stream."""
+        self.rsd = rsd
+        from aircontrol.core.hid_bridge import HIDBridge
+        self.hid_bridge = HIDBridge(rsd=rsd)
+        self.on_touch = self.hid_bridge.send_touch
+        self.on_button = self.hid_bridge.send_button
+
+    async def start_device_streaming(self) -> None:
+        """Start capturing video stream from connected iOS device."""
+        if not self.rsd:
+            logger.warning("Cannot start device streaming: No RSD connected")
+            return
+        if self._pmd_stream_task and not self._pmd_stream_task.done():
+            return
+        self._pmd_stream_task = asyncio.create_task(self._device_stream_loop())
+
+    async def _device_stream_loop(self) -> None:
+        """UDP RTP reception and HEVC depacketization loop."""
+        try:
+            from pymobiledevice3.remote.core_device.display_service import DisplayService
+            from pymobiledevice3.remote.core_device.screen_stream import open_media_receiver, depacketize_hevc
+
+            disp_svc = DisplayService(self.rsd)
+            await disp_svc.connect()
+            transport, local_ip = open_media_receiver(disp_svc, rcvbuf_sizes=(8 * 1024 * 1024, 4 * 1024 * 1024))
+            await disp_svc.start_video_stream(
+                client_ip=local_ip,
+                client_port=transport.local_port,
+                display_id=1,
+            )
+            self._is_streaming = True
+            logger.info("iOS display video stream started via UDP %s:%d", local_ip, transport.local_port)
+
+            fu_buffer = bytearray()
+            nal_out: list[bytes] = []
+            sock = transport.sock
+            loop = asyncio.get_running_loop()
+
+            while self.is_running and self._is_streaming:
+                try:
+                    data = await loop.sock_recv(sock, 65536)
+                    if not data:
+                        break
+                    if len(data) > 12:
+                        payload = data[12:]
+                        marker = bool(data[1] & 0x80)
+                        depacketize_hevc(payload, fu_buffer, nal_out)
+                        if marker and nal_out:
+                            au = b"".join(b"\x00\x00\x00\x01" + nal for nal in nal_out)
+                            nal_out.clear()
+                            self.broadcast_frame(au)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.debug("Packet receive error: %s", e)
+        except Exception as e:
+            logger.warning("Failed to start or run device stream loop: %s", e)
+        finally:
+            self._is_streaming = False
 
     @property
     def is_running(self) -> bool:
