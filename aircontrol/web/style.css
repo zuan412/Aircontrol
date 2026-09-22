@@ -1,0 +1,313 @@
+/* Aircontrol Bespoke iPhone 16 Pro Styling */
+:root {
+  --bg-color: #0b0d11;
+  --titanium-base: #2a2d34;
+  --titanium-highlight: #464a53;
+  --titanium-edge: #181a1f;
+  --screen-bezel: #050608;
+  --island-bg: #000000;
+  --accent-blue: #0071e3;
+  --text-primary: #f5f5f7;
+  --text-secondary: #86868b;
+  --font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bezel-radius: 52px;
+  --screen-radius: 46px;
+  --chassis-width: 420px;
+  --chassis-aspect: 19.5 / 9;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#app-viewport {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at 50% 30%, #171b23 0%, #090a0d 100%);
+}
+
+/* --- iPhone Outer Chassis & Hardware Body --- */
+.iphone-chassis {
+  position: relative;
+  width: min(calc(100vh * 9 / 19.5), 440px);
+  height: min(100vh - 20px, calc(440px * 19.5 / 9));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Physical Hardware Side Buttons */
+.chassis-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.chassis-left {
+  left: -8px;
+  top: 15%;
+  gap: 16px;
+}
+
+.chassis-right {
+  right: -8px;
+  top: 22%;
+}
+
+.hw-btn {
+  background: linear-gradient(90deg, #32353e 0%, #202227 100%);
+  border: 1px solid #4a4f5b;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: transform 0.08s ease, filter 0.08s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.chassis-left .hw-btn {
+  width: 6px;
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+  border-right: none;
+}
+
+.chassis-right .hw-btn {
+  width: 6px;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  border-left: none;
+}
+
+.hw-action {
+  height: 32px;
+  background: linear-gradient(90deg, #4f413d 0%, #3a2e2b 100%);
+  border-color: #785a52;
+}
+
+.hw-volup, .hw-voldown {
+  height: 52px;
+}
+
+.hw-power {
+  height: 78px;
+}
+
+.chassis-left .hw-btn:active {
+  transform: translateX(2px);
+  filter: brightness(1.2);
+}
+
+.chassis-right .hw-btn:active {
+  transform: translateX(-2px);
+  filter: brightness(1.2);
+}
+
+/* --- Titanium Bezel & Screen Outer Frame --- */
+.iphone-bezel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  border-radius: var(--bezel-radius);
+  border: 7px solid var(--titanium-base);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 2px var(--titanium-edge),
+    0 16px 40px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Inner Screen Container */
+.display-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--screen-radius);
+  overflow: hidden;
+  background: #000;
+}
+
+#screen-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  cursor: default;
+  touch-action: none;
+}
+
+/* --- Dynamic Island --- */
+.dynamic-island {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 110px;
+  height: 32px;
+  background-color: var(--island-bg);
+  border-radius: 20px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 12px;
+  gap: 10px;
+  box-shadow: 0 0 2px rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamic-island:hover {
+  width: 124px;
+}
+
+.island-camera {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #182236 0%, #03060c 100%);
+  box-shadow: inset 0 0 2px rgba(0, 80, 200, 0.4);
+}
+
+.island-sensor {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #08090d;
+}
+
+/* --- iOS Home Indicator Bar --- */
+.home-indicator-wrap {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 50;
+  cursor: pointer;
+}
+
+.home-indicator {
+  width: 134px;
+  height: 5px;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 3px;
+  transition: width 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.home-indicator-wrap:hover .home-indicator {
+  background-color: rgba(255, 255, 255, 0.95);
+  transform: translateY(-2px);
+}
+
+/* --- Standby Overlay --- */
+.standby-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.94);
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  z-index: 40;
+  backdrop-filter: blur(10px);
+}
+
+.standby-overlay.active {
+  display: flex;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.standby-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.standby-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 0 20px;
+}
+
+/* --- Telemetry HUD --- */
+.telemetry-hud {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: rgba(20, 24, 32, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-family: 'Consolas', monospace;
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.telemetry-hud.hidden {
+  display: none;
+}
+
+.hud-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hud-label {
+  color: var(--text-secondary);
+}
+
+.hud-val {
+  color: #30d158;
+  font-weight: 600;
+}
