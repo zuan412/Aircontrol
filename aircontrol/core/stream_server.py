@@ -70,20 +70,18 @@ class StreamServer:
             transport, local_ip = open_media_receiver(disp_svc, rcvbuf_sizes=(8 * 1024 * 1024, 4 * 1024 * 1024))
             await disp_svc.start_video_stream(
                 client_ip=local_ip,
-                client_port=transport.local_port,
+                client_port=transport.port,
                 display_id=1,
             )
             self._is_streaming = True
-            logger.info("iOS display video stream started via UDP %s:%d", local_ip, transport.local_port)
+            logger.info("iOS display video stream started via UDP %s:%d", local_ip, transport.port)
 
             fu_buffer = bytearray()
             nal_out: list[bytes] = []
-            sock = transport.sock
-            loop = asyncio.get_running_loop()
 
             while self.is_running and self._is_streaming:
                 try:
-                    data = await loop.sock_recv(sock, 65536)
+                    data = await transport.recv(65535)
                     if not data:
                         break
                     if len(data) > 12:
@@ -126,16 +124,25 @@ class StreamServer:
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
 
-        self._site = web.TCPSite(self._runner, self.host, self.requested_port)
-        await self._site.start()
+        last_err = None
+        for try_port in range(self.requested_port, self.requested_port + 20):
+            try:
+                self._site = web.TCPSite(self._runner, self.host, try_port)
+                await self._site.start()
+                assert self._site._server is not None
+                sockets = self._site._server.sockets
+                if sockets:
+                    self._bound_port = sockets[0].getsockname()[1]
+                else:
+                    self._bound_port = try_port
+                last_err = None
+                break
+            except OSError as err:
+                last_err = err
+                continue
 
-        # Retrieve actual bound port (important when port=0)
-        assert self._site._server is not None
-        sockets = self._site._server.sockets
-        if sockets:
-            self._bound_port = sockets[0].getsockname()[1]
-        else:
-            self._bound_port = self.requested_port
+        if last_err is not None:
+            raise last_err
 
         logger.info("Aircontrol StreamServer started on %s", self.url)
 
@@ -226,8 +233,8 @@ class StreamServer:
         await response.prepare(request)
         self._stream_subscribers.add(response)
         try:
-            while not response.prepared or not request.transport.is_closing():
-                await asyncio.sleep(1.0)
+            while True:
+                await asyncio.sleep(5.0)
         except (asyncio.CancelledError, ConnectionResetError):
             pass
         finally:

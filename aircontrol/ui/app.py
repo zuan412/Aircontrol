@@ -8,7 +8,7 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QStyle
 
 from aircontrol.ui.window import AircontrolWindow
 
@@ -55,6 +55,7 @@ class AircontrolApp:
             return
 
         self.tray_icon = QSystemTrayIcon(self.app)
+        self.tray_icon.setIcon(self.app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
         self.tray_icon.setToolTip("Aircontrol - iPhone Mirror & Control")
 
         tray_menu = QMenu()

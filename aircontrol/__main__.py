@@ -51,12 +51,16 @@ class EngineRunner:
     async def _async_main(self) -> None:
         from aircontrol.core.connection import ConnectionManager
         from aircontrol.core.stream_server import StreamServer
-        from pymobiledevice3.remote.core_device.screen_stream import ScreenStreamServer
 
         self.conn_mgr = ConnectionManager()
 
-        # Connect to iPhone
         try:
+            # Start our custom bespoke StreamServer (handles port retries if busy)
+            self.stream_server = StreamServer(host="127.0.0.1", port=self.port)
+            await self.stream_server.start()
+            self.actual_url = self.stream_server.url
+            self._ready_event.set()
+
             print(f"[Aircontrol] Đang tìm kiếm thiết bị iPhone ({'Wi-Fi' if self.via_wifi else 'USB'})...")
             devices = await self.conn_mgr.list_devices()
             target_udid = self.udid or (devices[0].udid if devices else None)
@@ -68,44 +72,26 @@ class EngineRunner:
                 dev_model = self.device_info.product_type or "iOS"
                 print(f"[Aircontrol] Đã kết nối thành công tới: {dev_name} ({dev_model})")
 
-                # Use battle-tested ScreenStreamServer with hardware WebCodecs
-                self.stream_server = ScreenStreamServer(
-                    rsd=self.conn_mgr.rsd,
-                    bind="127.0.0.1",
-                    http_port=self.port,
-                    audio_default_on=False,
-                )
-                self.actual_url = f"http://127.0.0.1:{self.port}"
-                self._ready_event.set()
-                await self.stream_server.serve()
+                await self.stream_server.attach_device(self.conn_mgr.rsd)
+                await self.stream_server.start_device_streaming()
             else:
-                print("[Aircontrol] Chưa phát hiện iPhone. Khởi động màn hình chờ...")
-                # Start fallback standby server
-                fallback = StreamServer(host="127.0.0.1", port=self.port)
-                await fallback.start()
-                self.stream_server = fallback
-                self.actual_url = fallback.url
-                self._ready_event.set()
-
-                # Poll for connection
+                print("[Aircontrol] Chưa phát hiện iPhone. Server đang chờ thiết bị cắm vào...")
                 while True:
                     await asyncio.sleep(2.0)
                     devs = await self.conn_mgr.list_devices()
                     if devs:
-                        print(f"[Aircontrol] Phát hiện thiết bị mới cắm vào: {devs[0].udid}. Đang khởi động lại luồng...")
-                        await fallback.stop()
+                        print(f"[Aircontrol] Phát hiện thiết bị mới cắm vào: {devs[0].udid}. Đang kết nối...")
                         self.device_info = await self.conn_mgr.connect(udid=devs[0].udid, via_wifi=self.via_wifi)
-                        self.stream_server = ScreenStreamServer(
-                            rsd=self.conn_mgr.rsd,
-                            bind="127.0.0.1",
-                            http_port=self.port,
-                            audio_default_on=False,
-                        )
-                        await self.stream_server.serve()
+                        await self.stream_server.attach_device(self.conn_mgr.rsd)
+                        await self.stream_server.start_device_streaming()
                         break
         except Exception as e:
             print(f"[Aircontrol] Lỗi kết nối thiết bị: {e}")
             self._ready_event.set()
+
+        # Keep server loop alive
+        while self.stream_server and self.stream_server.is_running:
+            await asyncio.sleep(1.0)
 
     def stop(self) -> None:
         if self.loop and self.loop.is_running():
