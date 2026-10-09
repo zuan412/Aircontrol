@@ -1,0 +1,16 @@
+{
+  "id": "stage-manager-clean",
+  "name": "Không Viền (Bo góc nhẹ)",
+  "compatible_devices": [],
+  "screen": {
+    "aspect_ratio": 0.461538,
+    "corner_radius_ratio": 0.08,
+    "has_dynamic_island": true,
+    "has_home_bar": true
+  },
+  "visuals": {
+    "bezel_width_ratio": 0.0,
+    "chassis_color": [0.0, 0.0, 0.0],
+    "chamfer_highlight": false
+  }
+}

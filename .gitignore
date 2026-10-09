@@ -1,10 +1,42 @@
+# Python Bytecode & Cache
 __pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
+*.py[cod]
+*$py.class
 *.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build & Release Artifacts
 dist/
 build/
+*.spec.bak
+
+# IDE & OS Specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+
+# Agent & Temporary Workspace Logs
+.agents/
 .agent_temp/
 .playwright-mcp/
 .profile/
+screenshots/
+*.log
+*.tmp

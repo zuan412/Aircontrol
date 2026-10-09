@@ -1,9 +1,13 @@
 @echo off
 chcp 65001 >nul
+setlocal
 set PYTHONUTF8=1
-python -m aircontrol %*
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo [Aircontrol] Gap loi khi chay chuong trinh. Nhan phim bat ky de dong...
-    pause >nul
+cd /d "%~dp0"
+
+if exist "%~dp0.venv\Scripts\python.exe" (
+    "%~dp0.venv\Scripts\python.exe" -m aircontrol %*
+) else (
+    python -m aircontrol %*
 )
+exit /b %errorlevel%
+

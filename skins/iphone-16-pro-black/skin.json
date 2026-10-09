@@ -1,0 +1,16 @@
+{
+  "id": "iphone-16-pro-black",
+  "name": "iPhone 16 Pro (Black Titanium)",
+  "compatible_devices": ["iPhone16,1-black"],
+  "screen": {
+    "aspect_ratio": 0.461538,
+    "corner_radius_ratio": 0.09,
+    "has_dynamic_island": true,
+    "has_home_bar": true
+  },
+  "visuals": {
+    "bezel_width_ratio": 0.024,
+    "chassis_color": [0.18, 0.19, 0.22],
+    "chamfer_highlight": true
+  }
+}
