@@ -19,7 +19,7 @@ Chúng tôi rất hoan nghênh mọi sự đóng góp: từ sửa lỗi (bug fix
 
 1. **Clone repository về máy:**
    ```powershell
-   git clone https://github.com/your-username/Aircontrol.git
+   git clone https://github.com/zuan412/Aircontrol.git
    cd Aircontrol
    ```
 

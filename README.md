@@ -86,7 +86,7 @@ Yêu cầu Python 3.11+:
 
 ```powershell
 # Clone mã nguồn
-git clone https://github.com/your-username/Aircontrol.git
+git clone https://github.com/zuan412/Aircontrol.git
 cd Aircontrol
 
 # Tạo môi trường ảo (khuyến nghị dùng uv hoặc venv)
