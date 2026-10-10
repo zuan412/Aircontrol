@@ -1,30 +1,30 @@
-# Hướng Dẫn Đóng Góp Vào Aircontrol (Contributing Guide)
+# Aircontrol Contribution Guide
 
-Chào mừng bạn đến với cộng đồng phát triển **Aircontrol**!  
-Aircontrol là dự án mã nguồn mở cung cấp giải pháp phản chiếu màn hình và điều khiển iPhone tốc độ cao 60 FPS độ trễ thấp trên Windows 10/11.
+Welcome to the **Aircontrol** development community!  
+Aircontrol is an open-source project providing high-speed, ultra-low latency (<30ms) 60 FPS screen mirroring and interactive remote control for iPhone on Windows 10/11.
 
-Chúng tôi rất hoan nghênh mọi sự đóng góp: từ sửa lỗi (bug fixes), tối ưu hóa hiệu năng, bổ sung tính năng mới cho đến cải thiện tài liệu.
+We warmly welcome all contributions: from bug fixes, performance optimizations, and new features to documentation improvements.
 
 ---
 
-## 🛠️ 1. Thiết Lập Môi Trường Phát Triển (Development Setup)
+## 🛠️ 1. Development Setup
 
-### Yêu Cầu Tiên Quyết:
-- **Hệ điều hành:** Windows 10 hoặc Windows 11 (64-bit).
-- **Python:** Python 3.11 hoặc mới hơn (khuyến nghị 3.11 hoặc 3.12).
-- **Trình quản lý gói:** Khuyến nghị dùng [`uv`](https://github.com/astral-sh/uv) để quản lý virtual environment siêu nhanh, hoặc dùng `python -m venv`.
-- **Driver Apple:** Đã cài đặt iTunes hoặc ứng dụng **Apple Devices** từ Microsoft Store (cung cấp driver Apple Mobile Device Support).
+### Prerequisites:
+- **Operating System:** Windows 10 or Windows 11 (64-bit).
+- **Python:** Python 3.11 or newer (Python 3.11 or 3.12 recommended).
+- **Package Manager:** [`uv`](https://github.com/astral-sh/uv) recommended for fast virtual environment management, or standard `python -m venv`.
+- **Apple Drivers:** iTunes or **Apple Devices** app installed from Microsoft Store (provides Apple Mobile Device Support drivers).
 
-### Các Bước Cài Đặt:
+### Installation Steps:
 
-1. **Clone repository về máy:**
+1. **Clone the repository:**
    ```powershell
    git clone https://github.com/zuan412/Aircontrol.git
    cd Aircontrol
    ```
 
-2. **Tạo và kích hoạt môi trường ảo (Virtual Environment):**
-   *Sử dụng `uv`:*
+2. **Create and activate virtual environment:**
+   *Using `uv`:*
    ```powershell
    uv venv
    .venv\Scripts\activate
@@ -32,7 +32,7 @@ Chúng tôi rất hoan nghênh mọi sự đóng góp: từ sửa lỗi (bug fix
    uv pip install pytest pytest-asyncio pyinstaller
    ```
 
-   *Hoặc sử dụng `python standard`:*
+   *Using standard `venv`:*
    ```powershell
    python -m venv .venv
    .venv\Scripts\activate
@@ -40,27 +40,27 @@ Chúng tôi rất hoan nghênh mọi sự đóng góp: từ sửa lỗi (bug fix
    pip install pytest pytest-asyncio pyinstaller
    ```
 
-3. **Kiểm tra cài đặt:**
+3. **Verify installation:**
    ```powershell
    pytest tests -q
    ```
-   Tất cả các bài kiểm thử phải đạt trạng thái `passed`.
+   All tests must report `passed`.
 
 ---
 
-## 🚀 2. Chạy Ứng Dụng Trong Môi Trường Dev
+## 🚀 2. Running in Development Mode
 
-- **Cách 1: Chạy nhanh qua script:**
+- **Option 1: Quick start via batch script:**
   ```powershell
   .\run.bat
   ```
 
-- **Cách 2: Chạy qua launcher:**
+- **Option 2: Launch via launcher script:**
   ```powershell
   python run_aircontrol.py
   ```
 
-- **Cách 3: Chạy dưới dạng module với các cờ tùy chọn:**
+- **Option 3: Run as Python module with flags:**
   ```powershell
   python -m aircontrol --wifi
   python -m aircontrol --usb
@@ -69,47 +69,47 @@ Chúng tôi rất hoan nghênh mọi sự đóng góp: từ sửa lỗi (bug fix
 
 ---
 
-## 🧪 3. Quy Chuẩn Kiểm Thử (Testing Guidelines)
+## 🧪 3. Testing Guidelines
 
-Aircontrol áp dụng nguyên tắc kiểm thử nghiêm ngặt:
-1. **Mọi tính năng mới hoặc bản sửa lỗi (bugfix) đều phải đi kèm unit test.**
-2. **Không commit code làm gãy test suite hiện tại.**
-3. Chạy toàn bộ test suite trước khi commit:
+Aircontrol enforces rigorous testing principles:
+1. **Every new feature or bugfix must be accompanied by unit tests.**
+2. **Never commit code that breaks existing test suites.**
+3. Run the full test suite before committing:
    ```powershell
    pytest tests -v
    ```
 
 ---
 
-## 📦 4. Đóng Gói Binary Độc Lập (Standalone Build)
+## 📦 4. Standalone Binary Build
 
-Dự án hỗ trợ đóng gói thành tệp thực thi độc lập `.exe` thông qua PyInstaller:
+The project supports building standalone `.exe` binaries via PyInstaller:
 ```powershell
 .\build_release.bat
 ```
-Kết quả biên dịch sẽ nằm tại:
-- `dist\Aircontrol\Aircontrol.exe` (Thư mục chạy portable)
-- `dist\Aircontrol-v0.1.0-win64.zip` (Tệp nén phát hành)
+Build outputs are located at:
+- `dist\Aircontrol\Aircontrol.exe` (Portable distribution directory)
+- `dist\Aircontrol-v0.1.0-win64.zip` (Release archive)
 
 ---
 
-## 📋 5. Quy Trình Tạo Pull Request (PR Workflow)
+## 📋 5. Pull Request Workflow
 
-1. **Tạo nhánh mới từ `master`:**
+1. **Create a feature branch from `master`:**
    ```powershell
-   git checkout -b feature/ten-tinh-nang
-   # hoặc: git checkout -b fix/ten-loi
+   git checkout -b feature/your-feature-name
+   # or: git checkout -b fix/your-bug-fix
    ```
 
-2. **Quy chuẩn thông điệp commit (Conventional Commits):**
-   - `feat(...)`: Thêm tính năng mới (ví dụ: `feat(audio): add WASAPI exclusive mode`)
-   - `fix(...)`: Sửa lỗi (ví dụ: `fix(stream): resolve packet drop in reorder buffer`)
-   - `docs(...)`: Cập nhật tài liệu
-   - `test(...)`: Bổ sung hoặc sửa đổi bài kiểm thử
-   - `refactor(...)`: Tái cấu trúc mã nguồn không thay đổi hành vi
+2. **Conventional Commits Specification:**
+   - `feat(...)`: New feature (e.g., `feat(audio): add WASAPI exclusive mode`)
+   - `fix(...)`: Bug fix (e.g., `fix(stream): resolve packet drop in reorder buffer`)
+   - `docs(...)`: Documentation updates
+   - `test(...)`: Adding or modifying tests
+   - `refactor(...)`: Code refactoring without behavioral changes
 
-3. **Đẩy nhánh lên GitHub và mở Pull Request:**
-   - Cung cấp mô tả rõ ràng về vấn đề được giải quyết.
-   - Đính kèm hình ảnh hoặc bằng chứng đo đạc nếu liên quan đến UI hoặc hiệu năng.
+3. **Push branch and open a Pull Request:**
+   - Provide a clear description of the problem solved.
+   - Attach screenshots or benchmark numbers if related to UI or performance.
 
-Cảm ơn bạn đã đồng hành và đóng góp vào Aircontrol!
+Thank you for contributing to Aircontrol!
